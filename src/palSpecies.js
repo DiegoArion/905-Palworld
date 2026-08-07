@@ -182,4 +182,10 @@ function palDisplayName(codename) {
   return PAL_SPECIES_NAMES[codename] || codename;
 }
 
-module.exports = { PAL_SPECIES_NAMES, palDisplayName };
+/** URL del icono del Pal (CDN publico de paldb.cc). Null si el codename no esta en la tabla. */
+function palIconUrl(codename) {
+  if (!PAL_SPECIES_NAMES[codename]) return null;
+  return `https://cdn.paldb.cc/image/Pal/Texture/PalIcon/Normal/T_${codename}_icon_normal.webp`;
+}
+
+module.exports = { PAL_SPECIES_NAMES, palDisplayName, palIconUrl };

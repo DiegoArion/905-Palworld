@@ -25,6 +25,7 @@ const config = {
     guildId: required('DISCORD_GUILD_ID'),
     channelId: required('DISCORD_CHANNEL_ID'),
     dashboardChannelId: process.env.DISCORD_DASHBOARD_CHANNEL_ID || null,
+    logsChannelId: required('DISCORD_LOGS_CHANNEL_ID'),
   },
   dathost: {
     email: required('DATHOST_EMAIL'),

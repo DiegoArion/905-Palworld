@@ -1,9 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 
 const COLORS = {
-  join: 0x57f287,
-  leave: 0xed4245,
-  chat: 0x5865f2,
   death: 0x99aab5,
   capture: 0xfee75c,
   status: 0xeb459e,
@@ -18,26 +15,14 @@ function formatDuration(totalSeconds) {
   return `${h}h ${m}m`;
 }
 
-function playerJoinEmbed(name) {
-  return new EmbedBuilder().setColor(COLORS.join).setDescription(`🟢 **${name}** se conectó al servidor`);
-}
-
-function playerLeaveEmbed(name, sessionSeconds) {
-  return new EmbedBuilder()
-    .setColor(COLORS.leave)
-    .setDescription(`🔴 **${name}** se desconectó (jugó ${formatDuration(sessionSeconds)} esta sesión)`);
-}
-
-function chatEmbed(name, message) {
-  return new EmbedBuilder().setColor(COLORS.chat).setDescription(`💬 **${name || 'Jugador'}**: ${message}`);
-}
-
 function deathEmbed(name, cause) {
   return new EmbedBuilder().setColor(COLORS.death).setDescription(`💀 **${name}** murió (${cause})`);
 }
 
-function captureEmbed(name, pal) {
-  return new EmbedBuilder().setColor(COLORS.capture).setDescription(`🟡 **${name}** capturó un **${pal}**`);
+function captureEmbed(name, pal, imageUrl) {
+  const embed = new EmbedBuilder().setColor(COLORS.capture).setDescription(`🟡 **${name}** capturó un **${pal}**`);
+  if (imageUrl) embed.setThumbnail(imageUrl);
+  return embed;
 }
 
 function serverStatusEmbed(status) {
@@ -114,9 +99,6 @@ function dashboardEmbed({ online, players, metrics, paused, error }) {
 module.exports = {
   formatDuration,
   formatUptime,
-  playerJoinEmbed,
-  playerLeaveEmbed,
-  chatEmbed,
   deathEmbed,
   captureEmbed,
   serverStatusEmbed,

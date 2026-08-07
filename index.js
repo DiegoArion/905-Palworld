@@ -1,3 +1,4 @@
+const { ActivityType } = require('discord.js');
 const config = require('./src/config');
 const DathostClient = require('./src/dathostClient');
 const PalworldApiClient = require('./src/palworldApiClient');
@@ -8,16 +9,8 @@ const StatusWatcher = require('./src/pollers/statusWatcher');
 const DashboardWatcher = require('./src/pollers/dashboardWatcher');
 const { createBot } = require('./src/discordBot');
 const { scheduleLeaderboard } = require('./src/leaderboardCron');
-const {
-  playerJoinEmbed,
-  playerLeaveEmbed,
-  chatEmbed,
-  deathEmbed,
-  captureEmbed,
-  serverStatusEmbed,
-  dashboardEmbed,
-} = require('./src/formatters');
-const { palDisplayName } = require('./src/palSpecies');
+const { deathEmbed, captureEmbed, serverStatusEmbed, dashboardEmbed } = require('./src/formatters');
+const { palDisplayName, palIconUrl } = require('./src/palSpecies');
 
 async function main() {
   const dathost = new DathostClient(config.dathost);
@@ -31,40 +24,49 @@ async function main() {
   const statusWatcher = new StatusWatcher(dathost, config.dathost.serverId, config.polling.statusMs);
   const dashboardWatcher = new DashboardWatcher(dathost, palworldApi, config.dathost.serverId, config.polling.dashboardMs);
 
-  playerWatcher.on('join', ({ name }) => bot.sendToChannel({ embeds: [playerJoinEmbed(name)] }));
-  playerWatcher.on('leave', ({ name, sessionSeconds }) =>
-    bot.sendToChannel({ embeds: [playerLeaveEmbed(name, sessionSeconds)] })
-  );
+  // Joins/leaves no se anuncian como mensajes (se considero invasivo); el
+  // tracking de playtime sigue andando igual dentro de playerWatcher.poll().
   playerWatcher.on('error', (err) => console.error('[playerWatcher]', err.message));
 
   ue4ssLogWatcher.on('event', (parsed) => {
     const { type, groups } = parsed;
-    if (type === 'chat') {
-      // El hook de chat tambien captura avisos de sistema (login/logout en
-      // el idioma del cliente) ademas de mensajes reales de jugadores; esos
-      // ya los cubre playerWatcher, asi que se descartan aca.
-      if (groups.name === 'SYSTEM') return;
-      bot.sendToChannel({ embeds: [chatEmbed(groups.name, groups.message)] });
-    } else if (type === 'death') {
-      bot.sendToChannel({ embeds: [deathEmbed(groups.name, groups.cause)] });
+    if (type === 'death') {
+      bot.sendToChannel({ embeds: [deathEmbed(groups.name, groups.cause)] }, config.discord.logsChannelId);
     } else if (type === 'capture') {
-      bot.sendToChannel({ embeds: [captureEmbed(groups.name, palDisplayName(groups.pal))] });
+      const palName = palDisplayName(groups.pal);
+      const iconUrl = palIconUrl(groups.pal);
+      bot.sendToChannel({ embeds: [captureEmbed(groups.name, palName, iconUrl)] }, config.discord.logsChannelId);
     }
+    // El chat ya no se manda a Discord (el mod lo sigue registrando en
+    // UE4SS.log, pero simplemente no reaccionamos a esas lineas).
   });
   ue4ssLogWatcher.on('error', (err) => console.error('[ue4ssLogWatcher]', err.message));
 
-  statusWatcher.on('change', ({ status }) => bot.sendToChannel({ embeds: [serverStatusEmbed(status)] }));
+  statusWatcher.on('change', ({ status }) =>
+    bot.sendToChannel({ embeds: [serverStatusEmbed(status)] }, config.discord.logsChannelId)
+  );
   statusWatcher.on('error', (err) => console.error('[statusWatcher]', err.message));
 
   dashboardWatcher.on('update', (data) => {
-    bot.upsertMessage(
-      config.discord.dashboardChannelId,
-      { embeds: [dashboardEmbed(data)] },
-      {
-        getId: () => store.getSetting('dashboardMessageId'),
-        setId: (id) => store.setSetting('dashboardMessageId', id),
-      }
-    );
+    const { online, paused, metrics } = data;
+    let presence = { name: 'servidor apagado', type: ActivityType.Watching };
+    if (paused) {
+      presence = { name: '0/? jugadores (en pausa)', type: ActivityType.Watching };
+    } else if (online && metrics) {
+      presence = { name: `${metrics.currentplayernum}/${metrics.maxplayernum} jugadores`, type: ActivityType.Watching };
+    }
+    bot.client.user?.setActivity(presence.name, { type: presence.type });
+
+    if (config.discord.dashboardChannelId) {
+      bot.upsertMessage(
+        config.discord.dashboardChannelId,
+        { embeds: [dashboardEmbed(data)] },
+        {
+          getId: () => store.getSetting('dashboardMessageId'),
+          setId: (id) => store.setSetting('dashboardMessageId', id),
+        }
+      );
+    }
   });
 
   await bot.start();
@@ -72,7 +74,7 @@ async function main() {
   playerWatcher.start();
   ue4ssLogWatcher.start();
   statusWatcher.start();
-  if (config.discord.dashboardChannelId) dashboardWatcher.start();
+  dashboardWatcher.start(); // siempre corre: alimenta la presencia del bot ademas del dashboard opcional
 
   const leaderboardTask = scheduleLeaderboard({
     cronExpr: config.leaderboard.cron,
