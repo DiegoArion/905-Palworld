@@ -23,7 +23,7 @@ function createBot(config, ctx) {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   const commands = loadCommands();
 
-  client.once('ready', async () => {
+  client.once('clientReady', async () => {
     console.log(`[discord] conectado como ${client.user.tag}`);
     try {
       await registerSlashCommands(config, commands);
@@ -50,20 +50,45 @@ function createBot(config, ctx) {
     }
   });
 
-  let channelPromise = null;
-  async function getChannel() {
-    if (!channelPromise) {
-      channelPromise = client.channels.fetch(config.discord.channelId);
+  const channelCache = new Map();
+  async function getChannel(channelId) {
+    if (!channelCache.has(channelId)) {
+      channelCache.set(channelId, client.channels.fetch(channelId));
     }
-    return channelPromise;
+    return channelCache.get(channelId);
   }
 
-  async function sendToChannel(payload) {
+  async function sendToChannel(payload, channelId = config.discord.channelId) {
     try {
-      const channel = await getChannel();
+      const channel = await getChannel(channelId);
       await channel.send(payload);
     } catch (err) {
       console.error('[discord] error enviando mensaje al canal:', err);
+    }
+  }
+
+  /**
+   * Crea (una vez) o edita un mensaje fijo en un canal, en vez de mandar
+   * mensajes nuevos cada vez. getId/setId persisten el id del mensaje
+   * (ej. en la base) para sobrevivir reinicios del bot.
+   */
+  async function upsertMessage(channelId, payload, { getId, setId }) {
+    try {
+      const channel = await getChannel(channelId);
+      const existingId = getId();
+      if (existingId) {
+        try {
+          const message = await channel.messages.fetch(existingId);
+          await message.edit(payload);
+          return;
+        } catch {
+          // El mensaje ya no existe (borrado a mano, etc.) -> se crea uno nuevo abajo.
+        }
+      }
+      const message = await channel.send(payload);
+      setId(message.id);
+    } catch (err) {
+      console.error('[discord] error actualizando mensaje fijo:', err);
     }
   }
 
@@ -71,7 +96,7 @@ function createBot(config, ctx) {
     await client.login(config.discord.token);
   }
 
-  return { client, start, sendToChannel };
+  return { client, start, sendToChannel, upsertMessage };
 }
 
 module.exports = { createBot };

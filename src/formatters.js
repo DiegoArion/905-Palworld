@@ -8,6 +8,7 @@ const COLORS = {
   capture: 0xfee75c,
   status: 0xeb459e,
   leaderboard: 0x5865f2,
+  dashboard: 0x2ecc71,
 };
 
 function formatDuration(totalSeconds) {
@@ -60,8 +61,59 @@ function leaderboardEmbed(rows) {
   return embed;
 }
 
+function formatUptime(totalSeconds) {
+  const d = Math.floor(totalSeconds / 86400);
+  const h = Math.floor((totalSeconds % 86400) / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+/** Embed del dashboard en vivo: estado del server + jugadores + rendimiento. */
+function dashboardEmbed({ online, players, metrics, paused, error }) {
+  const embed = new EmbedBuilder()
+    .setColor(paused ? 0x99aab5 : online ? COLORS.dashboard : COLORS.leave)
+    .setTitle('📊 Palworld — Estado en vivo')
+    .setTimestamp();
+
+  if (error) {
+    embed.setDescription(`⚠️ No se pudo actualizar: ${error}`);
+    return embed;
+  }
+
+  if (paused) {
+    embed
+      .addFields({ name: 'Servidor', value: '💤 En pausa (sin jugadores, se reactiva solo al conectarse alguien)' })
+      .addFields({ name: 'Conectados', value: 'Nadie conectado ahora mismo.' });
+    return embed;
+  }
+
+  embed.addFields({ name: 'Servidor', value: online ? '✅ En línea' : '⛔ Apagado', inline: true });
+
+  if (metrics) {
+    embed.addFields(
+      { name: 'Jugadores', value: `${metrics.currentplayernum}/${metrics.maxplayernum}`, inline: true },
+      { name: 'Día', value: `${metrics.days}`, inline: true },
+      { name: 'FPS', value: `${Math.round(metrics.serverfps)}`, inline: true },
+      { name: 'Uptime', value: formatUptime(metrics.uptime), inline: true },
+      { name: 'Bases', value: `${metrics.basecampnum}`, inline: true }
+    );
+  }
+
+  if (players) {
+    const list = players.length
+      ? players.map((p) => `• **${p.name}** (nivel ${p.level}, ${Math.round(p.ping)}ms)`).join('\n')
+      : 'Nadie conectado ahora mismo.';
+    embed.addFields({ name: 'Conectados', value: list });
+  }
+
+  return embed;
+}
+
 module.exports = {
   formatDuration,
+  formatUptime,
   playerJoinEmbed,
   playerLeaveEmbed,
   chatEmbed,
@@ -69,4 +121,5 @@ module.exports = {
   captureEmbed,
   serverStatusEmbed,
   leaderboardEmbed,
+  dashboardEmbed,
 };

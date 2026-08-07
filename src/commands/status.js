@@ -3,7 +3,7 @@ const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 module.exports = {
   data: new SlashCommandBuilder().setName('status').setDescription('Estado actual del servidor de Palworld'),
 
-  async execute(interaction, { dathost, rcon, config }) {
+  async execute(interaction, { dathost, palworldApi, config }) {
     await interaction.deferReply();
 
     const embed = new EmbedBuilder().setColor(0x5865f2).setTitle('Estado del servidor');
@@ -17,11 +17,13 @@ module.exports = {
     }
 
     try {
-      const players = await rcon.getPlayers();
-      const list = players.length ? players.map((p) => `• ${p.name}`).join('\n') : 'Nadie conectado ahora mismo.';
+      const players = await palworldApi.getPlayers();
+      const list = players.length
+        ? players.map((p) => `• ${p.name} (nivel ${p.level})`).join('\n')
+        : 'Nadie conectado ahora mismo.';
       embed.addFields({ name: `Jugadores conectados (${players.length})`, value: list });
     } catch (err) {
-      embed.addFields({ name: 'Jugadores conectados', value: `⚠️ No se pudo consultar RCON (${err.message})` });
+      embed.addFields({ name: 'Jugadores conectados', value: `⚠️ No se pudo consultar la API de Palworld (${err.message})` });
     }
 
     await interaction.editReply({ embeds: [embed] });

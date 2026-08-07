@@ -16,7 +16,7 @@ module.exports = {
       await interaction.reply({ content: `No encontré a ningún jugador que coincida con "${query}".`, ephemeral: true });
       return;
     }
-    const seconds = store.getPlaytimeSeconds(player.steam_id);
+    const seconds = store.getPlaytimeSeconds(player.player_uid);
     const estado = player.online ? ' (conectado ahora mismo)' : '';
     await interaction.reply(`**${player.name}** ha jugado **${formatDuration(seconds)}**${estado}.`);
   },

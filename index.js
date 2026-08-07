@@ -1,24 +1,34 @@
 const config = require('./src/config');
 const DathostClient = require('./src/dathostClient');
-const PalworldRcon = require('./src/rconClient');
+const PalworldApiClient = require('./src/palworldApiClient');
 const PlaytimeStore = require('./src/store');
 const PlayerWatcher = require('./src/pollers/playerWatcher');
 const ConsoleWatcher = require('./src/pollers/consoleWatcher');
 const StatusWatcher = require('./src/pollers/statusWatcher');
+const DashboardWatcher = require('./src/pollers/dashboardWatcher');
 const { createBot } = require('./src/discordBot');
 const { scheduleLeaderboard } = require('./src/leaderboardCron');
-const { playerJoinEmbed, playerLeaveEmbed, chatEmbed, deathEmbed, captureEmbed, serverStatusEmbed } = require('./src/formatters');
+const {
+  playerJoinEmbed,
+  playerLeaveEmbed,
+  chatEmbed,
+  deathEmbed,
+  captureEmbed,
+  serverStatusEmbed,
+  dashboardEmbed,
+} = require('./src/formatters');
 
 async function main() {
   const dathost = new DathostClient(config.dathost);
-  const rcon = new PalworldRcon(config.rcon);
+  const palworldApi = new PalworldApiClient(config.palworldApi);
   const store = new PlaytimeStore(config.dbPath);
 
-  const bot = createBot(config, { store, rcon, dathost, config });
+  const bot = createBot(config, { store, palworldApi, dathost, config });
 
-  const playerWatcher = new PlayerWatcher(rcon, store, config.polling.playerMs);
+  const playerWatcher = new PlayerWatcher(palworldApi, store, config.polling.playerMs);
   const consoleWatcher = new ConsoleWatcher(dathost, config.dathost.serverId, config.polling.consoleMs);
   const statusWatcher = new StatusWatcher(dathost, config.dathost.serverId, config.polling.statusMs);
+  const dashboardWatcher = new DashboardWatcher(dathost, palworldApi, config.dathost.serverId, config.polling.dashboardMs);
 
   playerWatcher.on('join', ({ name }) => bot.sendToChannel({ embeds: [playerJoinEmbed(name)] }));
   playerWatcher.on('leave', ({ name, sessionSeconds }) =>
@@ -36,19 +46,31 @@ async function main() {
       bot.sendToChannel({ embeds: [captureEmbed(groups.name, groups.pal)] });
     }
     // join/leave/serverStart/serverStop detectados en consola se ignoran a
-    // proposito: RCON (playerWatcher) y la API de Dathost (statusWatcher)
-    // son las fuentes de verdad para esos eventos.
+    // proposito: la REST API de Palworld (playerWatcher) y la API de Dathost
+    // (statusWatcher) son las fuentes de verdad para esos eventos.
   });
   consoleWatcher.on('error', (err) => console.error('[consoleWatcher]', err.message));
 
   statusWatcher.on('change', ({ status }) => bot.sendToChannel({ embeds: [serverStatusEmbed(status)] }));
   statusWatcher.on('error', (err) => console.error('[statusWatcher]', err.message));
 
+  dashboardWatcher.on('update', (data) => {
+    bot.upsertMessage(
+      config.discord.dashboardChannelId,
+      { embeds: [dashboardEmbed(data)] },
+      {
+        getId: () => store.getSetting('dashboardMessageId'),
+        setId: (id) => store.setSetting('dashboardMessageId', id),
+      }
+    );
+  });
+
   await bot.start();
 
   playerWatcher.start();
   consoleWatcher.start();
   statusWatcher.start();
+  if (config.discord.dashboardChannelId) dashboardWatcher.start();
 
   const leaderboardTask = scheduleLeaderboard({
     cronExpr: config.leaderboard.cron,
@@ -62,6 +84,7 @@ async function main() {
     playerWatcher.stop();
     consoleWatcher.stop();
     statusWatcher.stop();
+    dashboardWatcher.stop();
     leaderboardTask.stop();
     store.close();
     bot.client.destroy();
