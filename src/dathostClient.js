@@ -45,6 +45,11 @@ class DathostClient {
     return [];
   }
 
+  /** Contenido completo de un archivo del server (ej. UE4SS.log). La API no soporta Range requests. */
+  getFileText(serverId, remotePath) {
+    return this._request(`/game-servers/${serverId}/files/${remotePath}`);
+  }
+
   /** Envia una linea/comando a la consola del server. */
   sendConsoleCommand(serverId, line) {
     const body = new URLSearchParams({ line });

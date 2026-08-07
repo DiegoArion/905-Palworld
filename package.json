@@ -8,7 +8,8 @@
     "start": "node index.js",
     "dump-console": "node scripts/dump-console.js",
     "list-servers": "node scripts/list-servers.js",
-    "backup": "node scripts/backup-saves.js"
+    "backup": "node scripts/backup-saves.js",
+    "deploy-mod": "node scripts/deploy-mod.js"
   },
   "license": "MIT",
   "dependencies": {

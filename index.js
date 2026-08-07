@@ -3,7 +3,7 @@ const DathostClient = require('./src/dathostClient');
 const PalworldApiClient = require('./src/palworldApiClient');
 const PlaytimeStore = require('./src/store');
 const PlayerWatcher = require('./src/pollers/playerWatcher');
-const ConsoleWatcher = require('./src/pollers/consoleWatcher');
+const Ue4ssLogWatcher = require('./src/pollers/ue4ssLogWatcher');
 const StatusWatcher = require('./src/pollers/statusWatcher');
 const DashboardWatcher = require('./src/pollers/dashboardWatcher');
 const { createBot } = require('./src/discordBot');
@@ -26,7 +26,7 @@ async function main() {
   const bot = createBot(config, { store, palworldApi, dathost, config });
 
   const playerWatcher = new PlayerWatcher(palworldApi, store, config.polling.playerMs);
-  const consoleWatcher = new ConsoleWatcher(dathost, config.dathost.serverId, config.polling.consoleMs);
+  const ue4ssLogWatcher = new Ue4ssLogWatcher(dathost, config.dathost.serverId, config.polling.consoleMs);
   const statusWatcher = new StatusWatcher(dathost, config.dathost.serverId, config.polling.statusMs);
   const dashboardWatcher = new DashboardWatcher(dathost, palworldApi, config.dathost.serverId, config.polling.dashboardMs);
 
@@ -36,20 +36,21 @@ async function main() {
   );
   playerWatcher.on('error', (err) => console.error('[playerWatcher]', err.message));
 
-  consoleWatcher.on('event', (parsed) => {
+  ue4ssLogWatcher.on('event', (parsed) => {
     const { type, groups } = parsed;
     if (type === 'chat') {
+      // El hook de chat tambien captura avisos de sistema (login/logout en
+      // el idioma del cliente) ademas de mensajes reales de jugadores; esos
+      // ya los cubre playerWatcher, asi que se descartan aca.
+      if (groups.name === 'SYSTEM') return;
       bot.sendToChannel({ embeds: [chatEmbed(groups.name, groups.message)] });
     } else if (type === 'death') {
       bot.sendToChannel({ embeds: [deathEmbed(groups.name, groups.cause)] });
     } else if (type === 'capture') {
       bot.sendToChannel({ embeds: [captureEmbed(groups.name, groups.pal)] });
     }
-    // join/leave/serverStart/serverStop detectados en consola se ignoran a
-    // proposito: la REST API de Palworld (playerWatcher) y la API de Dathost
-    // (statusWatcher) son las fuentes de verdad para esos eventos.
   });
-  consoleWatcher.on('error', (err) => console.error('[consoleWatcher]', err.message));
+  ue4ssLogWatcher.on('error', (err) => console.error('[ue4ssLogWatcher]', err.message));
 
   statusWatcher.on('change', ({ status }) => bot.sendToChannel({ embeds: [serverStatusEmbed(status)] }));
   statusWatcher.on('error', (err) => console.error('[statusWatcher]', err.message));
@@ -68,7 +69,7 @@ async function main() {
   await bot.start();
 
   playerWatcher.start();
-  consoleWatcher.start();
+  ue4ssLogWatcher.start();
   statusWatcher.start();
   if (config.discord.dashboardChannelId) dashboardWatcher.start();
 
@@ -82,7 +83,7 @@ async function main() {
   function shutdown() {
     console.log('\nCerrando bot...');
     playerWatcher.stop();
-    consoleWatcher.stop();
+    ue4ssLogWatcher.stop();
     statusWatcher.stop();
     dashboardWatcher.stop();
     leaderboardTask.stop();

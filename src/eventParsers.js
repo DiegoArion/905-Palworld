@@ -1,38 +1,16 @@
-// Tabla de patrones para clasificar lineas crudas de la consola de Palworld.
+// Clasifica lineas crudas de la consola de Palworld.
 //
-// IMPORTANTE: estos patrones son una primera aproximacion basada en formatos
-// reportados por la comunidad. Palworld no documenta oficialmente el formato
-// de su log de consola, y por defecto probablemente NO incluya chat ni
-// capturas/muertes (ver scripts/dump-console.js para validarlo contra el
-// server real). Ajusta los regex aqui una vez que tengas ejemplos reales.
+// El log nativo de Palworld no trae chat/muertes/capturas (confirmado
+// contra el server real: solo trae conexiones/desconexiones/comandos, que
+// ya cubrimos via la REST API en playerWatcher). El unico patron real que
+// vale la pena parsear ahora es el que escribe nuestro propio mod
+// (palworld-mods/PalworldEventLogger), con un formato fijo y controlado por
+// nosotros: "[EVENTLOG] TIPO|campo1|resto".
 const PATTERNS = [
   {
-    type: 'join',
-    regex: /(?:LogSlate|LogTemp)?.*?player (?:has )?(?:logged in|connected)[:\s]+(?<name>[^\s(]+)/i,
-  },
-  {
-    type: 'leave',
-    regex: /(?:LogSlate|LogTemp)?.*?player (?:has )?(?:logged out|disconnected)[:\s]+(?<name>[^\s(]+)/i,
-  },
-  {
     type: 'chat',
-    regex: /\[Chat](?:\s*\[(?<name>[^\]]+)])?\s*[:>]\s*(?<message>.+)/i,
-  },
-  {
-    type: 'death',
-    regex: /(?<name>[^\s]+) (?:was killed by|died to) (?<cause>.+)/i,
-  },
-  {
-    type: 'capture',
-    regex: /(?<name>[^\s]+) captured (?:a |an )?(?<pal>[^\s(]+)/i,
-  },
-  {
-    type: 'serverStart',
-    regex: /(?:Server has started|Listening on|LogPal.*Initialized)/i,
-  },
-  {
-    type: 'serverStop',
-    regex: /(?:Server is shutting down|LogPal.*Shutdown)/i,
+    regex: /\[EVENTLOG] CHAT\|([^|]*)\|(.*)/,
+    groups: (m) => ({ name: m[1], message: m[2] }),
   },
 ];
 
@@ -42,10 +20,10 @@ const PATTERNS = [
  * @returns {{type: string, raw: string, groups: Record<string,string>} | null}
  */
 function parseLine(line) {
-  for (const { type, regex } of PATTERNS) {
+  for (const { type, regex, groups } of PATTERNS) {
     const match = line.match(regex);
     if (match) {
-      return { type, raw: line, groups: match.groups || {} };
+      return { type, raw: line, groups: groups(match) };
     }
   }
   return null;
