@@ -177,15 +177,32 @@ const PAL_SPECIES_NAMES = {
   Yeti_Grass: 'Wumpo Botan',
 };
 
-/** Convierte un codename interno (ej. "PinkCat", tomado de BP_PinkCat_C) a su nombre real. */
-function palDisplayName(codename) {
-  return PAL_SPECIES_NAMES[codename] || codename;
+// Variantes grandes/jefe (ej. "MopKing_BOSS") no tienen entrada ni icono
+// propio en la tabla/CDN; se resuelven con los del Pal base.
+const VARIANT_SUFFIXES = ['_BOSS', '_Alpha'];
+
+function resolveBaseCodename(codename) {
+  if (PAL_SPECIES_NAMES[codename]) return codename;
+  for (const suffix of VARIANT_SUFFIXES) {
+    if (codename.endsWith(suffix)) {
+      const base = codename.slice(0, -suffix.length);
+      if (PAL_SPECIES_NAMES[base]) return base;
+    }
+  }
+  return null;
 }
 
-/** URL del icono del Pal (CDN publico de paldb.cc). Null si el codename no esta en la tabla. */
+/** Convierte un codename interno (ej. "PinkCat", tomado de BP_PinkCat_C) a su nombre real. */
+function palDisplayName(codename) {
+  const base = resolveBaseCodename(codename);
+  return base ? PAL_SPECIES_NAMES[base] : codename;
+}
+
+/** URL del icono del Pal (CDN publico de paldb.cc). Null si no se pudo resolver un codename conocido. */
 function palIconUrl(codename) {
-  if (!PAL_SPECIES_NAMES[codename]) return null;
-  return `https://cdn.paldb.cc/image/Pal/Texture/PalIcon/Normal/T_${codename}_icon_normal.webp`;
+  const base = resolveBaseCodename(codename);
+  if (!base) return null;
+  return `https://cdn.paldb.cc/image/Pal/Texture/PalIcon/Normal/T_${base}_icon_normal.webp`;
 }
 
 module.exports = { PAL_SPECIES_NAMES, palDisplayName, palIconUrl };
