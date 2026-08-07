@@ -18,12 +18,29 @@ class PlayerWatcher extends EventEmitter {
   }
 
   start() {
+    this._reconcileStaleSessions();
     this.poll();
     this._timer = setInterval(() => this.poll(), this.intervalMs);
   }
 
   stop() {
     if (this._timer) clearInterval(this._timer);
+  }
+
+  /**
+   * Si el proceso se corto de golpe (crash, kill -9) en una corrida previa,
+   * puede quedar algun jugador marcado "online" en la base aunque en
+   * realidad ya se desconecto (y quiza se reconecto sin que lo vieramos).
+   * Sin este paso, ese jugador nunca dispara un "join" de nuevo: el proximo
+   * poll() lo ve online en la base Y online en el server real, y asume que
+   * ya estaba. Cerramos esas sesiones colgadas al arrancar (sin avisar,
+   * porque no es un leave real) para que el primer poll() genere un join
+   * limpio si sigue conectado de verdad.
+   */
+  _reconcileStaleSessions() {
+    for (const row of this.store.getOnlinePlayers()) {
+      this.store.playerLeft(row.player_uid);
+    }
   }
 
   async poll() {
