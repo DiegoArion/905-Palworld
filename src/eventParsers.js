@@ -12,6 +12,11 @@ const PATTERNS = [
     regex: /\[EVENTLOG] CHAT\|([^|]*)\|(.*)/,
     groups: (m) => ({ name: m[1], message: m[2] }),
   },
+  {
+    type: 'capture',
+    regex: /\[EVENTLOG] CAPTURE\|([^|]*)\|(.*)/,
+    groups: (m) => ({ name: m[1], pal: m[2] }),
+  },
 ];
 
 /**

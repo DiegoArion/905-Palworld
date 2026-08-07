@@ -1,18 +1,24 @@
 -- PalworldEventLogger
--- Escribe eventos del juego a la consola del server con un prefijo fijo
--- ([EVENTLOG] ...) para que el bot de Discord (que ya lee la consola via
+-- Escribe eventos del juego a UE4SS.log con un prefijo fijo
+-- ([EVENTLOG] ...) para que el bot de Discord (que tailea ese archivo via
 -- la API de Dathost) los detecte y clasifique. No manda nada por HTTP
 -- directo porque UE4SS/Lua no trae libreria de red.
 --
--- Hook de chat verificado contra una fuente real y publica:
--- https://gist.github.com/xrandox/46bff6611a7e115b1f780928e83b40c3
--- (RegisterHook para /Script/Pal.PalGameStateInGame:BroadcastChatMessage,
--- struct FPalChatMessage con campos Sender/Message confirmados).
+-- Chat: hook verificado contra una fuente real y publica
+-- (https://gist.github.com/xrandox/46bff6611a7e115b1f780928e83b40c3).
 --
--- Muertes y capturas de Pals NO estan incluidas todavia: no hay nombres de
--- funcion confirmados para esos eventos (se necesita correr el dumper de
--- UE4SS contra el server para encontrarlos). Se agregan en una iteracion
--- aparte cuando esten confirmados.
+-- Captura: encontrada por prueba y error en el server real, dumpeando
+-- funciones/parametros con ForEachFunction/ForEachProperty (APIs reales de
+-- UE4SS, sin GUI/dumper interactivo). PalCaptureSuccess(AttackerPlayer,
+-- Monster) confirmado en vivo: dispara con el jugador y el Pal capturado.
+--
+-- Muerte de jugador: pendiente. Los candidatos probados (ProcessDeadAction,
+-- los delegates CapturePalDelegate/KillPalDelegate) no dispararon ni con
+-- una muerte de jugador ni con la muerte de un Pal -- ademas confirmamos
+-- que los hooks sobre "*__DelegateSignature" no disparan nunca via
+-- RegisterHook (son solo la firma de tipo del delegate, no el punto real
+-- donde se invoca). Falta dumpear la clase del personaje (PalPlayerCharacter
+-- o similar) para encontrar el hook real.
 
 RegisterHook("/Script/Pal.PalGameStateInGame:BroadcastChatMessage", function(self, ChatMessage)
   local ok, err = pcall(function()
@@ -23,6 +29,47 @@ RegisterHook("/Script/Pal.PalGameStateInGame:BroadcastChatMessage", function(sel
   end)
   if not ok then
     print(string.format("[EVENTLOG] ERROR|chat hook: %s\n", tostring(err)))
+  end
+end)
+
+RegisterHook("/Script/Pal.PalUtility:PalCaptureSuccess", function(Context, AttackerPlayer, Monster)
+  local ok, err = pcall(function()
+    local player = AttackerPlayer:get()
+    local monster = Monster:get()
+
+    local playerName = "Alguien"
+    local psOk, playerState = pcall(function()
+      return player.PlayerState
+    end)
+    if psOk and playerState then
+      local nameOk, name = pcall(function()
+        local n = playerState:GetPlayerName()
+        local sOk, s = pcall(function()
+          return n:ToString()
+        end)
+        if sOk then
+          return s
+        end
+        return n
+      end)
+      if nameOk and name then
+        playerName = tostring(name)
+      end
+    end
+
+    local codename = "un Pal"
+    local fnOk, fullName = pcall(function()
+      return monster:GetFullName()
+    end)
+    if fnOk and fullName then
+      local className = tostring(fullName):match("^(%S+)")
+      codename = (className and className:match("^BP_(.+)_C$")) or className or codename
+    end
+
+    print(string.format("[EVENTLOG] CAPTURE|%s|%s\n", playerName, codename))
+  end)
+  if not ok then
+    print(string.format("[EVENTLOG] ERROR|capture hook: %s\n", tostring(err)))
   end
 end)
 

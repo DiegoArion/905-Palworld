@@ -17,6 +17,7 @@ const {
   serverStatusEmbed,
   dashboardEmbed,
 } = require('./src/formatters');
+const { palDisplayName } = require('./src/palSpecies');
 
 async function main() {
   const dathost = new DathostClient(config.dathost);
@@ -47,7 +48,7 @@ async function main() {
     } else if (type === 'death') {
       bot.sendToChannel({ embeds: [deathEmbed(groups.name, groups.cause)] });
     } else if (type === 'capture') {
-      bot.sendToChannel({ embeds: [captureEmbed(groups.name, groups.pal)] });
+      bot.sendToChannel({ embeds: [captureEmbed(groups.name, palDisplayName(groups.pal))] });
     }
   });
   ue4ssLogWatcher.on('error', (err) => console.error('[ue4ssLogWatcher]', err.message));
