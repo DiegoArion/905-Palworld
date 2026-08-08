@@ -38,10 +38,19 @@ RegisterHook("/Script/Pal.PalUtility:PalCaptureSuccess", function(Context, Attac
     local monster = Monster:get()
 
     local playerName = "Alguien"
+    local playerActorName = "?"
+    pcall(function()
+      playerActorName = player:GetFullName()
+    end)
+
     local psOk, playerState = pcall(function()
       return player.PlayerState
     end)
-    if psOk and playerState then
+    if not psOk then
+      print(string.format("[EVENTLOG] NAMEDEBUG|PlayerState pcall fallo|actor=%s|err=%s\n", playerActorName, tostring(playerState)))
+    elseif not playerState then
+      print(string.format("[EVENTLOG] NAMEDEBUG|PlayerState es nil|actor=%s\n", playerActorName))
+    else
       local nameOk, name = pcall(function()
         local n = playerState:GetPlayerName()
         local sOk, s = pcall(function()
@@ -54,6 +63,8 @@ RegisterHook("/Script/Pal.PalUtility:PalCaptureSuccess", function(Context, Attac
       end)
       if nameOk and name then
         playerName = tostring(name)
+      else
+        print(string.format("[EVENTLOG] NAMEDEBUG|GetPlayerName fallo|actor=%s|err=%s\n", playerActorName, tostring(name)))
       end
     end
 
